@@ -1,0 +1,28 @@
+{
+  "CITest": {
+    "blades": {
+      "hello-world": {
+        "title": "Hello world blade"
+      }
+    }
+  },
+  "permissions": {
+    "CITest:access": "Open CITest menu",
+    "CITest:create": "Create CITest related data",
+    "CITest:read": "View CITest related data",
+    "CITest:update": "Update CITest related data",
+    "CITest:delete": "Delete CITest related data"
+  },
+  "settings": {
+    "CITest": {
+      "CITestEnabled": {
+        "title": "CITest Enabled",
+        "description": "CITest Enabled setting"
+      },
+      "CITestPassword": {
+        "title": "CITest Password",
+        "description": "CITest Password setting"
+      }
+    }
+  }
+}

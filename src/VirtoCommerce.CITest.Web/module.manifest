@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+    <id>VirtoCommerce.CITest</id>
+    <version>3.200.0</version>
+    <version-tag></version-tag>
+
+    <platformVersion>3.200.0</platformVersion>
+    <dependencies>
+        <!--<dependency id="VirtoCommerce.Core" version="3.200.0" />-->
+    </dependencies>
+
+    <title>VirtoCommerce CITest extension module</title>
+    <description>VirtoCommerce CITest extension module</description>
+
+    <authors>
+        <author>Jon Doe</author>
+    </authors>
+    <owners>
+        <owner>VirtoCommerce</owner>
+    </owners>
+
+    <projectUrl>https://github.com/VirtoCommerce/vc-module-ci-test</projectUrl>
+    <iconUrl>Modules/$(VirtoCommerce.CITest)/Content/logo.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+
+    <assemblyFile>VirtoCommerce.CITest.Web.dll</assemblyFile>
+    <moduleType>VirtoCommerce.CITest.Web.Module, VirtoCommerce.CITest.Web</moduleType>
+
+    <releaseNotes>First version.</releaseNotes>
+    <copyright>Copyright © 2022 VirtoCommerce. All rights reserved</copyright>
+    <tags>extension module</tags>
+    <useFullTypeNameInSwagger>false</useFullTypeNameInSwagger>
+</module>
