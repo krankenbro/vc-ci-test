@@ -1,0 +1,167 @@
+# vTest CI
+name: Module CI
+
+on:
+  schedule:
+    - cron: 0 0 * * *
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - '.github/**'
+      - 'docs/**'
+      - 'build/**'
+      - 'README.md'
+      - 'LICENSE'
+      - '**/argoDeploy.json'
+      - samples/**
+    branches:
+      [master, dev]
+  pull_request:
+    branches:
+      [master, dev]
+    paths-ignore:
+      - 'docs/**'
+      - 'build/**'
+      - 'README.md'
+      - 'LICENSE'
+      - '**/argoDeploy.json'
+      - samples/**
+
+jobs:
+  ci:
+    if: ${{ github.actor != 'dependabot[bot]' &&
+           (github.event.pull_request.head.repo.full_name == github.repository ||
+           github.event.pull_request.head.repo.full_name == '') }}  # Check that PR not from forked repo and not from Dependabot
+    runs-on: ubuntu-latest
+    env:
+      CLOUD_INSTANCE_BASE_URL: ${{secrets.CLOUD_INSTANCE_BASE_URL}}
+      CLIENT_ID: ${{secrets.CLIENT_ID}}
+      CLIENT_SECRET: ${{secrets.CLIENT_SECRET}}
+      SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+      GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+      NUGET_KEY: ${{ secrets.NUGET_KEY }}
+      BLOB_SAS: ${{ secrets.BLOB_TOKEN }}
+      VERSION_SUFFIX: ''
+      BUILD_STATE: 'failed'
+      RELEASE_STATUS: 'false'
+
+    outputs:
+      artifactUrl: ${{ steps.artifactUrl.outputs.download_url }}
+      jira-keys: ${{ steps.jira_keys.outputs.jira-keys }}
+      moduleId: ${{ steps.artifact_ver.outputs.moduleId }}
+
+    steps:
+
+      - name: Set RELEASE_STATUS
+        if: ${{ github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+        run: |
+          echo "RELEASE_STATUS=true" >> $GITHUB_ENV
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install VirtoCommerce.GlobalTool
+        run: dotnet tool install --global VirtoCommerce.GlobalTool --prerelease
+
+      - name: Install dotnet-sonarscanner
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Get Changelog
+        id: changelog
+        uses: VirtoCommerce/vc-github-actions/changelog-generator@master
+
+      - name: Get Artifact Version
+        uses: VirtoCommerce/vc-github-actions/get-image-version@master
+        id: artifact_ver
+
+      - name: Set VERSION_SUFFIX variable
+        run: |
+            echo "VERSION_SUFFIX=${{ steps.artifact_ver.outputs.suffix }}" >> $GITHUB_ENV
+
+      - name: Add version suffix
+        if: ${{ github.ref != 'refs/heads/master' }}
+        uses: VirtoCommerce/vc-github-actions/add-version-suffix@master
+        with:
+          versionSuffix: ${{ env.VERSION_SUFFIX }}
+
+      - name: SonarCloud Begin
+        uses: VirtoCommerce/vc-github-actions/sonar-scanner-begin@master
+
+      - name: Build
+        run: vc-build Compile
+
+      - name: Unit Tests
+        run: vc-build Test -skip
+
+      - name: SonarCloud End
+        uses: VirtoCommerce/vc-github-actions/sonar-scanner-end@master
+
+      - name: Quality Gate
+        uses: VirtoCommerce/vc-github-actions/sonar-quality-gate@master
+        with:
+          login: ${{secrets.SONAR_TOKEN}}
+
+      - name: Packaging
+        run: vc-build Compress -skip Clean+Restore+Compile+Test
+
+      - name: Publish Nuget
+        if: ${{ (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/master') }}
+        uses: VirtoCommerce/vc-github-actions/publish-nuget@master
+
+      - name: Publish to Blob
+        if: ${{ github.ref == 'refs/heads/dev' || github.event_name == 'pull_request' }}
+        id: blobRelease
+        uses: VirtoCommerce/vc-github-actions/publish-blob-release@master
+        with:
+          blobSAS: ${{ secrets.BLOB_TOKEN }}
+
+      - name: Add Jira link
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: VirtoCommerce/vc-github-actions/publish-jira-link@master
+        with:
+          branchName: ${{ github.head_ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add link to PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: VirtoCommerce/vc-github-actions/publish-artifact-link@master
+        with:
+          artifactUrl: ${{ steps.blobRelease.outputs.packageUrl }}
+          downloadComment: 'Artifact URL:'
+
+      - name: Publish Github Release
+        if: ${{ github.ref == 'refs/heads/master' }}
+        id: githubRelease
+        with:
+          changelog: ${{ steps.changelog.outputs.changelog }}
+        uses: VirtoCommerce/vc-github-actions/publish-github-release@master
+
+      - name: Set artifactUrl value
+        id: artifactUrl
+        run: |
+          if [ '${{ github.ref }}' = 'refs/heads/master' ]; then
+            echo ::set-output name=download_url::${{ steps.githubRelease.outputs.downloadUrl }}
+          else
+            echo ::set-output name=download_url::${{ steps.blobRelease.outputs.packageUrl }}
+          fi;
+
+      - name: Setup Git Credentials
+        if: ${{ (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/master') }}
+        uses: VirtoCommerce/vc-github-actions/setup-git-credentials-github@master
+        with:
+          githubToken: ${{ secrets.REPO_TOKEN }}
+
+      - name: Publish Manifest
+        if: ${{ (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/master')  }}
+        uses: VirtoCommerce/vc-github-actions/publish-manifest@master
+        with:
+          packageUrl: ${{ steps.blobRelease.outputs.packageUrl }}
+
+      - name: Increment Patch Version
+        run: |
+            vc-build IncrementPatch
+            git add Directory.Build.props *module.manifest
+            git commit -m "ci: Auto IncrementPatch"
+            git push
