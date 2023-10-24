@@ -1,16 +1,13 @@
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
-WORKDIR /
-
-# Copy everything
-COPY . ./
-# Restore as distinct layers
-RUN dotnet restore
-# Build and publish a release
-RUN dotnet publish -c Release -o platform
-COPY /src/VirtoCommerce.Platform.Web/modules /platform/modules
-
-# Build runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:6.0
-WORKDIR /
-COPY --from=build-env platform .
+
+COPY ./platform /opt/virtocommerce/platform
+
+RUN apt-get update && apt-get install -y wget fontconfig libfreetype6 libx11-6 libxcb1 libxext6 libxrender1 xfonts-75dpi xfonts-base libjpeg62-turbo \
+    && wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.buster_amd64.deb && dpkg -i wkhtmltox_0.12.6-1.buster_amd64.deb
+
+RUN apt-get clean autoclean \
+    && apt-get autoremove --yes \
+    && rm -rf /var/lib/{apt,dpkg,cache,log}/
+WORKDIR /opt/virtocommerce/platform
+
 ENTRYPOINT ["dotnet", "VirtoCommerce.Platform.Web.dll"]
